@@ -7,6 +7,8 @@ pipeline {
     }
 
     stages {
+
+        // 1. BUILD
         stage('Build') {
             steps {
                 bat '''
@@ -15,6 +17,7 @@ pipeline {
             }
         }
 
+        // 2. TEST
         stage('Test') {
             steps {
                 bat '''
@@ -23,6 +26,7 @@ pipeline {
             }
         }
 
+        // 3. END-TO-END TESTING
         stage('E2E') {
             steps {
                 retry(3) {
@@ -31,6 +35,7 @@ pipeline {
                     '''
                 }
             }
+
             post {
                 always {
                     publishHTML(target: [
@@ -45,20 +50,27 @@ pipeline {
             }
         }
 
+        // 4. DEPLOY TO NETLIFY
         stage('Deploy') {
             steps {
                 retry(3) {
                     bat '''
-                        docker run --rm -e NETLIFY_SITE_ID -e NETLIFY_AUTH_TOKEN -v "%WORKSPACE%:/src" -v npm-cache:/root/.npm node:18-alpine sh -c "mkdir /tmp/deploy && cd /tmp/deploy && npm install netlify-cli --ignore-scripts && cp -r /src/build /tmp/deploy/build && node_modules/.bin/netlify --version && echo Deploying to Netlify Site ID: $NETLIFY_SITE_ID && node_modules/.bin/netlify status && node_modules/.bin/netlify deploy --dir=build --prod --no-build"
+                        docker run --rm ^
+                            -e NETLIFY_SITE_ID ^
+                            -e NETLIFY_AUTH_TOKEN ^
+                            -v "%WORKSPACE%:/src" ^
+                            node:18-alpine sh -c "mkdir /tmp/deploy && cd /tmp/deploy && npm install netlify-cli --ignore-scripts && cp -r /src/build ./build && node_modules/.bin/netlify deploy --dir=build --prod --no-build --site=$NETLIFY_SITE_ID --auth=$NETLIFY_AUTH_TOKEN"
                     '''
                 }
             }
         }
     }
 
+    // POST-BUILD ACTIONS
     post {
         always {
-            junit allowEmptyResults: true, testResults: 'test-results/junit.xml'
+            junit allowEmptyResults: true,
+                  testResults: 'test-results/junit.xml'
         }
     }
 }
